@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Care Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: The application is designed as a task-oriented, tabbed dashboard. This structure was chosen over a linear document to provide the helper with immediate access to the information they need at any given moment. The main sections are: "Today" (a dynamic dashboard and the default view), "Daily Care," "Meals," "Activities," "Chores," "Health & Safety," and a searchable "Glossary." This non-linear approach enhances usability by organizing information by function, such as how to perform a task (Daily Care) or what to do now (Today). A prominent, always-accessible Emergency button ensures critical information is available instantly, which is paramount for safety. Gemini API features are added to make the app a dynamic assistant. -->
+    <!-- Visualization & Content Choices: The application converts static tables and lists from the report into interactive elements. Report Info: Weekly Schedule -> Goal: Inform/Organize -> Viz: HTML Grid -> Interaction: Dynamically highlights the current day and time block. Justification: Provides at-a-glance context for the user's immediate tasks. Library/Method: Vanilla JS. Report Info: Chore Lists -> Goal: Track/Organize -> Viz: Interactive checklists -> Interaction: Clickable checkboxes (visual feedback, not persistent). Justification: Engages the user and provides clarity on completed tasks. Library/Method: HTML/JS. Report Info: Meal Plan -> Goal: Inspire/Assist -> Viz: Button + Modal -> Interaction: Click button to call Gemini API to generate new meal ideas based on dietary profile. Justification: Overcomes static plan limitations and provides tailored, creative assistance. Library/Method: Gemini API via fetch. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; background-color: #FEFBF6; }
+        .nav-button { transition: all 0.2s ease-in-out; }
+        .nav-button.active { background-color: #E85A4F; color: white; }
+        .nav-button:not(.active):hover { background-color: #EAE7DC; }
+        .content-card { background-color: white; border: 1px solid #EAE7DC; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+        .accordion-header { cursor: pointer; }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .lang-cantonese { font-family: 'Noto Sans TC', sans-serif; }
+        .lang-indonesian { font-style: italic; }
+        .current-time-block { background-color: #FFFBEB; border-left: 4px solid #F59E0B; }
+        .chart-container { position: relative; width: 100%; max-width: 600px; margin-left: auto; margin-right: auto; height: 300px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 350px; } }
+        
+        /* Modal Styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.5); /* Black w/ opacity */
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 2rem;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 0.75rem;
+            position: relative;
+        }
+        .close-button {
+            color: #aaa;
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div id="app" class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">婆婆護理指南</h1>
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 lang-indonesian">Panduan Perawatan Nenek</h1>
+            <p class="text-gray-500 mt-1">Interactive Care Guide for Madam [Name]</p>
+        </header>
+
+        <nav class="mb-6">
+            <div class="flex flex-wrap justify-center gap-2">
+                <button data-tab="today" class="nav-button active font-semibold py-2 px-4 rounded-full">Today (今日/Hari Ini)</button>
+                <button data-tab="care" class="nav-button font-semibold py-2 px-4 rounded-full">Daily Care (日常護理/Perawatan)</button>
+                <button data-tab="meals" class="nav-button font-semibold py-2 px-4 rounded-full">Meals (膳食/Makanan)</button>
+                <button data-tab="activities" class="nav-button font-semibold py-2 px-4 rounded-full">Activities (活動/Aktivitas)</button>
+                <button data-tab="chores" class="nav-button font-semibold py-2 px-4 rounded-full">Chores (家務/Pekerjaan)</button>
+                <button data-tab="health" class="nav-button font-semibold py-2 px-4 rounded-full">Health (健康/Kesehatan)</button>
+                <button data-tab="glossary" class="nav-button font-semibold py-2 px-4 rounded-full">Glossary (詞彙/Glosarium)</button>
+                <button id="emergency-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-full transition-colors">EMERGENCY (緊急/DARURAT)</button>
+            </div>
+        </nav>
+
+        <main id="main-content">
+        </main>
+    </div>
+
+    <!-- Modal Structure -->
+    <div id="gemini-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2 id="modal-title" class="text-2xl font-bold mb-4">✨ AI Generated Ideas</h2>
+            <div id="modal-body">
+                <p>Generating ideas...</p>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const appData = {
+            care: {
+                title: "Daily Care Essentials (婆婆每日護理要點 / Kebutuhan Perawatan Harian)",
+                intro: "A consistent routine helps Madam [Name] feel secure. These sections detail her personal care needs throughout the day. Please deliver all care with dignity and respect.",
+                sections: [
+                    { 
+                        title: "Morning Routine (上午日常 / Rutinitas Pagi)",
+                        content: [
+                            "<strong>Waking Up (起身):</strong> Gently wake Madam [Name] around 7:30 AM. Allow her time to wake up slowly.",
+                            "<strong>Toileting (如廁):</strong> Assist her to the toilet safely.",
+                            "<strong>Hygiene (個人衛生):</strong> Help with washing face, brushing teeth/dentures, and combing hair.",
+                            "<strong>Dressing (更衣):</strong> Help her choose and wear comfortable, weather-appropriate clothes.",
+                            "<strong>Medication (服藥):</strong> Give medication as per the schedule in the Health section.",
+                            "<strong>Breakfast (早餐):</strong> Prepare and assist with breakfast.",
+                            "<strong>Companionship (陪伴):</strong> Chat with her or do a light activity like watching the news."
+                        ]
+                    },
+                    {
+                        title: "Mid-day & Afternoon (中午及下午 / Siang & Sore)",
+                        content: [
+                            "<strong>Lunch (午餐):</strong> Prepare and assist with lunch.",
+                            "<strong>Medication (服藥):</strong> Give medication if required.",
+                            "<strong>Rest/Nap (休息/午睡):</strong> Help her get comfortable for her usual nap time.",
+                            "<strong>Exercises (運動):</strong> Do some light exercises or activities from the Activities section.",
+                            "<strong>Snack & Hydration (茶點/飲水):</strong> Offer a healthy snack and remind her to drink water.",
+                            "<strong>Companionship (陪伴):</strong> Chat, watch TV, or do a simple hobby she enjoys."
+                        ]
+                    },
+                    {
+                        title: "Evening Routine (晚間日常 / Rutinitas Malam)",
+                        content: [
+                            "<strong>Dinner (晚餐):</strong> Prepare and assist with dinner.",
+                            "<strong>Medication (服藥):</strong> Give medication if required.",
+                            "<strong>Prepare for Bed (準備睡覺):</strong> Help her change into comfortable sleepwear.",
+                            "<strong>Hygiene (個人衛生):</strong> Assist with evening cleaning (face, teeth/dentures).",
+                            "<strong>Toileting (如廁):</strong> Assist her to the toilet before bed.",
+                            "<strong>Night Safety (晚間安全):</strong> Ensure her bed is comfortable, a night light is on, and the path to the toilet is clear."
+                        ]
+                    },
+                    {
+                        title: "Specific Hygiene Guidance (個人衛生特別指引 / Panduan Kebersihan Khusus)",
+                        content: [
+                            "<strong>Bathing (沐浴):</strong> Bathe every [e.g., two days]. Use moderate water temperature. Always use a non-slip mat and handrails. Supervise at all times to prevent falls.",
+                            "<strong>Toileting (如廁):</strong> Assist as needed. If she has incontinence, change pads/diapers regularly and keep the area clean and dry.",
+                            "<strong>Oral Care (口腔護理):</strong> Assist with brushing teeth or cleaning/soaking dentures daily.",
+                            "<strong>Skin Care (皮膚護理):</strong> Check for any redness or sores. Apply moisturizer for dry skin.",
+                            "<strong>Mobility (輔助行動):</strong> Help her get in/out of bed and chairs. If she uses a walker or cane, ensure she uses it correctly. Move slowly and steadily."
+                        ]
+                    }
+                ]
+            },
+            meals: {
+                title: "Nutrition & Meal Plan (膳食與餐飲準備 / Gizi & Persiapan Makanan)",
+                intro: "Good nutrition is vital. Meals should be healthy, easy to chew, and follow any dietary restrictions. Emphasize steamed, boiled, or lightly stir-fried dishes with less salt and oil.",
+                dietProfile: {
+                    title: "Madam [Name]'s Dietary Profile (婆婆的膳食要求 / Profil Diet Nenek)",
+                    points: [
+                        "<strong>Restrictions (限制):</strong> Low salt, low sugar, minimal oil.",
+                        "<strong>Texture (軟硬度):</strong> Soft diet, easy to chew, minced meat is good.",
+                        "<strong>Preferences (喜好):</strong> Loves steamed fish, congee, soups, and traditional Cantonese flavors.",
+                        "<strong>Hydration (補充水分):</strong> Encourage drinking water/soup throughout the day.",
+                        "<strong>Portion Size (食量):</strong> Serve senior-appropriate portions."
+                    ]
+                },
+                plan: [
+                    { day: "Monday (一/Senin)", breakfast: "Millet Congee (小米粥)", lunch: "Steamed Fish (蒸魚), Rice, Choy Sum", dinner: "Winter Melon Soup with Rice (冬瓜湯飯)" },
+                    { day: "Tuesday (二/Selasa)", breakfast: "Oatmeal (燕麥片), Soy Milk", lunch: "Rice Noodles in Soup (湯米粉)", dinner: "Steamed Chicken with Mushrooms (冬菇蒸雞)" },
+                    { day: "Wednesday (三/Rabu)", breakfast: "Rice Vermicelli Soup (雞絲米粉)", lunch: "Steamed Dumplings (蒸餃)", dinner: "Mapo Tofu (soft) (麻婆豆腐)" },
+                    { day: "Thursday (四/Kamis)", breakfast: "Steamed Egg Custard (蒸水蛋)", lunch: "Stuffed Tofu (釀豆腐)", dinner: "Lotus Root Soup (蓮藕湯)" },
+                    { day: "Friday (五/Jumat)", breakfast: "Pork & Century Egg Congee (皮蛋瘦肉粥)", lunch: "Macaroni Soup (雞肉通粉)", dinner: "Steamed Ribs with Squash (蒸排骨)" },
+                    { day: "Saturday (六/Sabtu)", breakfast: "Vegetable Bun (菜肉包)", lunch: "Stir-fried Noodles (牛肉炒麵)", dinner: "Chicken & Corn Soup (粟米雞茸羹)" },
+                    { day: "Sunday (日/Minggu)", breakfast: "Leftover Chicken Congee (雞絲粥)", lunch: "Family Preference", dinner: "Family Preference" }
+                ]
+            },
+            activities: {
+                title: "Daily Exercise & Well-being (每日運動與身心健康 / Olahraga Harian & Kesejahteraan)",
+                intro: "Gentle exercise helps maintain mobility and mood. Safety is the top priority. Always use a sturdy chair and ensure the area is clear. Stop if she feels any pain or dizziness.",
+                sections: [
+                    { 
+                        title: "Seated Exercises (坐式運動 / Latihan Duduk) (10-15 mins)",
+                        items: [
+                            { name: "Seated Marching (坐式踏步)", desc: "Sit tall, lift knees one by one. 20-30 times." },
+                            { name: "Arm Raises (舉手臂)", desc: "Raise arms forward, to sides, then up. 5-10 times each." },
+                            { name: "Leg Extensions (伸展小腿)", desc: "Extend one leg, hold, then lower. 5-10 times each leg." },
+                            { name: "Torso Twists (軀幹轉動)", desc: "Gently twist upper body left and right. 5 times each side." },
+                        ]
+                    },
+                    {
+                        title: "Simple Stretches (簡單伸展 / Peregangan Sederhana) (5 mins)",
+                        items: [
+                            { name: "Neck Tilts (頸部傾斜)", desc: "Gently tilt head side to side, hold for 10-15 secs." },
+                            { name: "Shoulder & Chest Stretch (肩胸伸展)", desc: "Clasp hands behind back or open arms wide. Hold for 15-20 secs." },
+                            { name: "Hamstring Stretch (大腿後肌伸展)", desc: "Sit on chair edge, extend one leg, lean forward gently. Hold 15-20 secs." },
+                        ]
+                    },
+                    {
+                        title: "Companionship Activities (陪伴活動 / Aktivitas Kebersamaan)",
+                        items: [
+                             { name: "Gentle Walks (散步)", desc: "If weather and health permit, take a slow walk indoors or in a safe outdoor area." },
+                             { name: "Conversation (傾偈)", desc: "Chat with her, listen to music, or read together." },
+                             { name: "Hobbies (興趣)", desc: "Look at old photo albums or do simple crafts." },
+                        ]
+                    }
+                ]
+            },
+            chores: {
+                title: "Household Responsibilities (家務事宜 / Tanggung Jawab Rumah Tangga)",
+                intro: "A clean and safe home is part of good care. Balance these tasks with direct care for Madam [Name].",
+                daily: {
+                    title: "Daily Chores (每日家務 / Pekerjaan Harian)",
+                    items: [
+                        "Meal prep & cleanup (3x)", "Wash dishes", "Wipe tables & counters",
+                        "Tidy living areas", "Empty trash bins", "Quick bathroom wipe-down",
+                        "Make Madam [Name]'s bed", "Ensure her items are within reach"
+                    ]
+                },
+                weekly: {
+                    title: "Weekly Chores (每週家務 / Pekerjaan Mingguan)",
+                    items: [
+                        "Thoroughly clean bathrooms", "Thoroughly clean kitchen", "Dust furniture",
+                        "Mop floors (2x a week)", "Laundry & ironing", "Change bed linens",
+                        "Grocery shopping", "Check refrigerator"
+                    ]
+                }
+            },
+            health: {
+                 title: "Health Monitoring & Safety (健康監察與家居安全 / Pemantauan Kesehatan)",
+                 intro: "Your observations are very important. Preventing falls is a top priority. Always report any concerns to the family.",
+                 sections: [
+                    {
+                        title: "Medication Chart (藥物表 / Jadwal Obat) - To be filled by family",
+                        type: 'table',
+                        headers: ["Medication (藥物)", "Dosage (劑量)", "Time (時間)", "Purpose (用途)", "Instructions (指示)"],
+                        rows: [
+                            ["[Familiy to fill]", "[Familiy to fill]", "[Familiy to fill]", "[Familiy to fill]", "[Familiy to fill]"],
+                            ["[Familiy to fill]", "[Familiy to fill]", "[Familiy to fill]", "[Familiy to fill]", "[Familiy to fill]"],
+                        ]
+                    },
+                    {
+                        title: "Observing and Reporting (觀察與報告 / Mengamati dan Melaporkan)",
+                        type: 'list',
+                        content: [
+                            "<strong>Appetite (胃口)</strong>", "<strong>Sleep patterns (睡眠)</strong>", "<strong>Mood (情緒)</strong>", "<strong>Mobility (活動能力)</strong>", 
+                            "<strong>Pain (痛楚)</strong>", "<strong>Mental state (e.g., confusion) (精神狀態)</strong>", "<strong>Skin condition (皮膚)</strong>", "<strong>Toileting habits (大小便)</strong>"
+                        ]
+                    },
+                    {
+                        title: "Fall Prevention (預防跌倒 / Pencegahan Jatuh)",
+                        type: 'list',
+                        content: [
+                            "Keep paths clear of clutter, wires, and rugs.",
+                            "Ensure good lighting, especially at night (use a night light).",
+                            "Use non-slip mats in the bathroom and kitchen.",
+                            "Wipe up spills immediately.",
+                            "Ensure she wears well-fitting, non-slip shoes.",
+                            "Assist her with risky movements (e.g., reaching for high items)."
+                        ]
+                    }
+                 ]
+            },
+            emergency: {
+                title: "Emergency Information (緊急情況資訊 / Informasi Darurat)",
+                intro: "Stay calm. Call for help, then inform a family member immediately.",
+                contacts: [
+                    { name: "Police / Fire / Ambulance (警察/消防/救護車)", number: "999", style: "text-red-600 font-bold text-2xl" },
+                    { name: "Family Contact 1 (主要聯絡人)", number: "[Family to provide number]", style: "" },
+                    { name: "Family Contact 2 (後備聯絡人)", number: "[Family to provide number]", style: "" },
+                    { name: "Madam [Name]'s Doctor (醫生)", number: "[Family to provide number]", style: "" },
+                    { name: "Building Management (大廈管理處)", number: "[Family to provide number]", style: "" },
+                ],
+                actions: [
+                    {
+                        title: "What to Say when calling 999",
+                        cantonese: "清楚講出：我需要 [警察 / 消防車 / 救護車]。地址係 [講出詳細地址]。",
+                        indonesian: "Sebutkan dengan jelas: Saya butuh [Polisi / Pemadam / Ambulans]. Alamatnya adalah [Sebutkan alamat lengkap]."
+                    },
+                    {
+                        title: "In Case of a Fall (如遇跌倒)",
+                        cantonese: "如果嚴重受傷，切勿移動佢。打999。陪伴在側，保持鎮定。",
+                        indonesian: "Jika terluka parah, JANGAN PINDAHKAN. Hubungi 999. Tetap di sisinya, tenangkan."
+                    },
+                    {
+                        title: "In Case of Fire (如遇火警)",
+                        cantonese: "如果安全，立即疏散。到安全地方後打999。切勿使用升降機。",
+                        indonesian: "Jika aman, segera evakuasi. Hubungi 999 dari tempat aman. Jangan gunakan lift."
+                    }
+                ]
+            },
+            glossary: {
+                title: "Useful Bilingual Glossary (實用雙語詞彙表 / Glosarium Bilingual)",
+                intro: "Use the filters or search bar to quickly find a word.",
+                categories: ["All", "Care", "Food", "Household", "Body"],
+                terms: [
+                    { en: "Are you comfortable?", cn: "你舒服嗎？ (néih syu1fuk6 maa3?)", id: "Apakah Anda nyaman?", cat: "Care" },
+                    { en: "Time for medicine", cn: "食藥時間 (sik6 joek6 si4gaan3)", id: "Waktunya minum obat", cat: "Care" },
+                    { en: "Pain / Hurt", cn: "痛 (tung3)", id: "Sakit / Nyeri", cat: "Care" },
+                    { en: "Dizzy", cn: "頭暈 (tau4wan4)", id: "Pusing", cat: "Care" },
+                    { en: "Tired", cn: "攰 (gui6)", id: "Lelah / Capek", cat: "Care" },
+                    { en: "Shower/Bathe", cn: "沖涼 (cung1 loeng4)", id: "Mandi", cat: "Care" },
+                    { en: "Rice", cn: "飯 (faan6)", id: "Nasi", cat: "Food" },
+                    { en: "Congee / Porridge", cn: "粥 (zuk1)", id: "Bubur", cat: "Food" },
+                    { en: "Fish", cn: "魚 (jyu2)", id: "Ikan", cat: "Food" },
+                    { en: "Chicken", cn: "雞 (gai1)", id: "Ayam", cat: "Food" },
+                    { en: "Pork", cn: "豬肉 (zyu1juk6)", id: "Daging babi", cat: "Food" },
+                    { en: "Vegetables", cn: "菜 (coi3)", id: "Sayuran", cat: "Food" },
+                    { en: "Soup", cn: "湯 (tong1)", id: "Sup", cat: "Food" },
+                    { en: "Drink water", cn: "飲水 (jam2 seoi2)", id: "Minum air", cat: "Food" },
+                    { en: "Clean", cn: "清潔 (cing1git3)", id: "Membersihkan", cat: "Household" },
+                    { en: "Wash clothes", cn: "洗衫 (sai2saam1)", id: "Mencuci baju", cat: "Household" },
+                    { en: "Mop floor", cn: "拖地 (to1dei6)", id: "Mengepel lantai", cat: "Household" },
+                    { en: "Cook", cn: "煮飯 (zyu2faan6)", id: "Memasak", cat: "Household" },
+                    { en: "Kitchen", cn: "廚房 (cyu4fong2)", id: "Dapur", cat: "Household" },
+                    { en: "Bathroom", cn: "廁所 (ci3so2)", id: "Kamar mandi", cat: "Household" },
+                    { en: "Head", cn: "頭 (tau4)", id: "Kepala", cat: "Body" },
+                    { en: "Hand", cn: "手 (sau2)", id: "Tangan", cat: "Body" },
+                    { en: "Back", cn: "背脊 (bui3zek3)", id: "Punggung", cat: "Body" },
+                    { en: "Leg", cn: "腳 (goek3)", id: "Kaki", cat: "Body" },
+                    { en: "Stomach", cn: "肚 (tou5)", id: "Perut", cat: "Body" },
+                ]
+            },
+            schedule: {
+                title: "Weekly Schedule (每週時間表 / Jadwal Mingguan)",
+                intro: "This is a general framework. Family and helper should customize it together. It includes daily tasks and helper's rest day.",
+                headers: ["Time", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                rows: [
+                    { time: "7-9 AM", tasks: ["Wake up, Morning Care, Meds, Breakfast"] },
+                    { time: "9-10 AM", tasks: ["Light Exercise", "Daily Chores", "Light Exercise", "Daily Chores", "Light Exercise", "Gentle Activities", ""] },
+                    { time: "10-12 PM", tasks: ["Weekly Chore (Laundry)", "Appt/Shopping", "Weekly Chore (Bathroom)", "Weekly Chore (Kitchen)", "Weekly Chore (Laundry)", "Family Visit", ""] },
+                    { time: "12-1 PM", tasks: ["Lunch Prep & Meal"] },
+                    { time: "1-3 PM", tasks: ["Madam [Name]'s Rest, Helper's Break"] },
+                    { time: "3-5 PM", tasks: ["Snack, Companionship, Light Activity/Walk"] },
+                    { time: "5-7 PM", tasks: ["Dinner Prep & Meal"] },
+                    { time: "7-8 PM", tasks: ["Evening Care, Meds, Prepare for Bed"] },
+                    { time: "8 PM+", tasks: ["Madam [Name] Rests, Helper's Personal Time"] }
+                ]
+            }
+        };
+
+        const mainContent = document.getElementById('main-content');
+        const navButtons = document.querySelectorAll('.nav-button');
+        const modal = document.getElementById('gemini-modal');
+        const modalCloseButton = document.querySelector('.close-button');
+        const modalBody = document.getElementById('modal-body');
+
+        function renderToday() {
+            const schedule = appData.schedule;
+            const today = new Date();
+            const dayIndex = today.getDay(); 
+            const hour = today.getHours();
+
+            let scheduleHtml = `<div class="grid grid-cols-1 md:grid-cols-8 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
+                <div class="bg-gray-100 p-2 font-bold text-center">${schedule.headers[0]}</div>
+                ${schedule.headers.slice(1).map((h, i) => `<div class="bg-gray-100 p-2 font-bold text-center ${ (i + 1) % 7 === dayIndex % 7 ? 'bg-amber-200' : ''}">${h}</div>`).join('')}`;
+            
+            schedule.rows.forEach(row => {
+                const timeParts = row.time.split('-').map(t => parseInt(t));
+                const startHour = timeParts[0];
+                const isCurrentBlock = hour >= startHour && hour < (timeParts[1] || startHour + 1);
+
+                scheduleHtml += `<div class="bg-white p-2 font-semibold ${isCurrentBlock ? 'current-time-block' : ''}">${row.time}</div>`;
+                for (let i = 0; i < 7; i++) {
+                    let task = row.tasks[i] || (row.tasks.length === 1 ? row.tasks[0] : '');
+                    if (i === 6) task = 'HELPER\'S REST DAY';
+                     scheduleHtml += `<div class="bg-white p-2 text-sm ${ (i + 1) % 7 === dayIndex % 7 ? 'bg-amber-50' : ''} ${isCurrentBlock ? 'current-time-block' : ''}">${task}</div>`;
+                }
+            });
+            scheduleHtml += `</div>`;
+            
+            mainContent.innerHTML = `
+                <div class="content-card p-6 mb-6">
+                    <h2 class="text-2xl font-bold mb-2">${schedule.title}</h2>
+                    <p class="text-gray-600 mb-4">${schedule.intro}</p>
+                    ${scheduleHtml}
+                </div>`;
+        }
+        
+        function renderCare() {
+            const care = appData.care;
+            mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2">${care.title}</h2>
+                    <p class="text-gray-600 mb-4">${care.intro}</p>
+                    <div class="space-y-4">
+                        ${care.sections.map(section => `
+                            <div>
+                                <div class="accordion-header bg-gray-50 hover:bg-gray-100 p-4 rounded-lg flex justify-between items-center">
+                                    <h3 class="font-semibold">${section.title}</h3>
+                                    <span>▼</span>
+                                </div>
+                                <div class="accordion-content px-4">
+                                    <ul class="list-disc list-inside space-y-2 py-4 text-gray-700">
+                                        ${section.content.map(item => `<li><span class="lang-cantonese">${item.split('(')[1].split(')')[0]}</span> / <span class="lang-indonesian">${item.split('/')[1].trim()}</span><br>${item.split(')')[0].split('(')[0].trim()}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+        }
+
+        function renderMeals() {
+            const meals = appData.meals;
+            mainContent.innerHTML = `
+                <div class="content-card p-6 mb-6">
+                     <h2 class="text-2xl font-bold mb-2">${meals.dietProfile.title}</h2>
+                     <ul class="list-disc list-inside space-y-2 text-gray-700">
+                        ${meals.dietProfile.points.map(point => `<li>${point}</li>`).join('')}
+                     </ul>
+                </div>
+                <div class="content-card p-6">
+                    <div class="flex justify-between items-center mb-2">
+                         <h2 class="text-2xl font-bold">${meals.title}</h2>
+                         <button id="get-meal-ideas" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full transition-colors">✨ Get New Meal Ideas</button>
+                    </div>
+                    <p class="text-gray-600 mb-4">${meals.intro}</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr>
+                                    <th class="py-2 px-4 bg-gray-100 border-b">Day (日/Hari)</th>
+                                    <th class="py-2 px-4 bg-gray-100 border-b">Breakfast (早餐)</th>
+                                    <th class="py-2 px-4 bg-gray-100 border-b">Lunch (午餐)</th>
+                                    <th class="py-2 px-4 bg-gray-100 border-b">Dinner (晚餐)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${meals.plan.map(item => `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="py-2 px-4 border-b font-semibold">${item.day}</td>
+                                        <td class="py-2 px-4 border-b">${item.breakfast}</td>
+                                        <td class="py-2 px-4 border-b">${item.lunch}</td>
+                                        <td class="py-2 px-4 border-b">${item.dinner}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
+        
+        function renderActivities() {
+            const activities = appData.activities;
+            mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2">${activities.title}</h2>
+                    <p class="text-gray-600 mb-4">${activities.intro}</p>
+                    <div class="space-y-6">
+                    ${activities.sections.map(section => `
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3">${section.title}</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                ${section.items.map(item => `
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <h4 class="font-bold">${item.name}</h4>
+                                        <p class="text-sm text-gray-600">${item.desc}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderChores() {
+            const chores = appData.chores;
+            mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2">${chores.title}</h2>
+                    <p class="text-gray-600 mb-4">${chores.intro}</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3">${chores.daily.title}</h3>
+                            <ul class="space-y-2">
+                                ${chores.daily.items.map(item => `
+                                    <li class="flex items-center">
+                                        <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3">
+                                        <span>${item}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3">${chores.weekly.title}</h3>
+                             <ul class="space-y-2">
+                                ${chores.weekly.items.map(item => `
+                                    <li class="flex items-center">
+                                        <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3">
+                                        <span>${item}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function renderHealth() {
+            const health = appData.health;
+             mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2">${health.title}</h2>
+                    <p class="text-gray-600 mb-6">${health.intro}</p>
+                    <div class="space-y-8">
+                        ${health.sections.map(section => {
+                            if (section.type === 'table') {
+                                return `
+                                    <div>
+                                        <h3 class="text-xl font-semibold mb-3">${section.title}</h3>
+                                        <div class="overflow-x-auto">
+                                            <table class="w-full text-left border-collapse">
+                                                <thead>
+                                                    <tr>
+                                                        ${section.headers.map(h => `<th class="py-2 px-4 bg-gray-100 border-b">${h}</th>`).join('')}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${section.rows.map(row => `
+                                                        <tr class="hover:bg-gray-50">
+                                                            ${row.map(cell => `<td class="py-2 px-4 border-b">${cell}</td>`).join('')}
+                                                        </tr>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                `;
+                            } else {
+                                return `
+                                    <div>
+                                        <h3 class="text-xl font-semibold mb-3">${section.title}</h3>
+                                        <ul class="list-disc list-inside space-y-2 text-gray-700">
+                                            ${section.content.map(item => `<li>${item}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                `;
+                            }
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderGlossary(filterCat = 'All', searchTerm = '') {
+            const glossary = appData.glossary;
+            const lowerSearchTerm = searchTerm.toLowerCase();
+            
+            const filteredTerms = glossary.terms.filter(term => {
+                const inCategory = filterCat === 'All' || term.cat === filterCat;
+                const inSearch = !searchTerm || 
+                                 term.en.toLowerCase().includes(lowerSearchTerm) ||
+                                 term.cn.toLowerCase().includes(lowerSearchTerm) ||
+                                 term.id.toLowerCase().includes(lowerSearchTerm);
+                return inCategory && inSearch;
+            });
+
+            mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2">${glossary.title}</h2>
+                    <p class="text-gray-600 mb-4">${glossary.intro}</p>
+                    
+                    <div class="flex flex-wrap gap-4 mb-4">
+                        <input type="search" id="glossary-search" placeholder="Search (搜尋/Cari)..." class="flex-grow p-2 border rounded-md" value="${searchTerm}">
+                        <div class="flex flex-wrap gap-2 items-center">
+                            ${glossary.categories.map(cat => `
+                                <button data-cat="${cat}" class="glossary-cat-btn px-3 py-1 text-sm rounded-full ${filterCat === cat ? 'bg-blue-500 text-white' : 'bg-gray-200'}">${cat}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div id="glossary-list" class="space-y-2">
+                        ${filteredTerms.map(term => `
+                            <div class="p-3 bg-gray-50 rounded-md">
+                                <p class="font-semibold">${term.en}</p>
+                                <p class="lang-cantonese text-gray-700">${term.cn}</p>
+                                <p class="lang-indonesian text-gray-700">${term.id}</p>
+                            </div>
+                        `).join('')}
+                        ${filteredTerms.length === 0 ? `<p class="text-center text-gray-500 py-4">No results found.</p>`: ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEmergency() {
+            const emergency = appData.emergency;
+            mainContent.innerHTML = `
+                <div class="content-card p-6 border-4 border-red-500">
+                    <h2 class="text-3xl font-bold text-red-600 mb-2">${emergency.title}</h2>
+                    <p class="text-gray-600 mb-6">${emergency.intro}</p>
+                    
+                    <div class="mb-6">
+                        <h3 class="text-xl font-semibold mb-3">Key Contacts (重要電話)</h3>
+                        <div class="space-y-3">
+                            ${emergency.contacts.map(contact => `
+                                <div class="bg-red-50 p-4 rounded-lg">
+                                    <p class="font-semibold">${contact.name}</p>
+                                    <p class="${contact.style}">${contact.number}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-xl font-semibold mb-3">Emergency Actions (應急行動)</h3>
+                        <div class="space-y-4">
+                           ${emergency.actions.map(action => `
+                               <div class="bg-yellow-50 p-4 rounded-lg">
+                                   <h4 class="font-bold">${action.title}</h4>
+                                   <p class="lang-cantonese">${action.cantonese}</p>
+                                   <p class="lang-indonesian">${action.indonesian}</p>
+                               </div>
+                           `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function getMealSuggestions() {
+            modal.style.display = "block";
+            modalBody.innerHTML = `<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div><p class="ml-4">Generating ideas...</p></div>`;
+
+            const profile = appData.meals.dietProfile.points.join(' ');
+            const prompt = `You are an expert Cantonese home-style cook specializing in nutritious meals for the elderly. Based on these dietary restrictions and preferences: "${profile}", suggest 3 new, simple, and healthy meal ideas (one for breakfast, one for lunch, one for dinner) for an 80-year-old Cantonese lady. For each meal, provide the name in English and Traditional Chinese, and a brief, easy-to-follow description of how to prepare it.`;
+
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    modalBody.innerHTML = text.replace(/\n/g, '<br>');
+                } else {
+                    modalBody.innerHTML = '<p class="text-red-500">Sorry, I could not generate ideas at this moment. Please try again later.</p>';
+                    console.error("Gemini API Error: Unexpected response structure", result);
+                }
+            } catch(error) {
+                modalBody.innerHTML = '<p class="text-red-500">An error occurred while fetching ideas. Please check the console for details.</p>';
+                console.error("Error fetching from Gemini API:", error);
+            }
+        }
+
+
+        function handleNavClick(e) {
+            const targetButton = e.target.closest('.nav-button');
+            if (!targetButton) return;
+
+            const tab = targetButton.dataset.tab;
+            if (tab) {
+                navButtons.forEach(btn => btn.classList.remove('active'));
+                targetButton.classList.add('active');
+            }
+            
+            switch(tab) {
+                case 'care': renderCare(); break;
+                case 'meals': renderMeals(); break;
+                case 'activities': renderActivities(); break;
+                case 'chores': renderChores(); break;
+                case 'health': renderHealth(); break;
+                case 'glossary': renderGlossary(); break;
+                case 'today':
+                default:
+                    renderToday();
+            }
+        }
+        
+        function handleMainContentClick(e) {
+            const accordionHeader = e.target.closest('.accordion-header');
+            if (accordionHeader) {
+                const content = accordionHeader.nextElementSibling;
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }
+                return;
+            }
+
+            const catButton = e.target.closest('.glossary-cat-btn');
+            if (catButton) {
+                const searchInput = document.getElementById('glossary-search');
+                renderGlossary(catButton.dataset.cat, searchInput ? searchInput.value : '');
+                return;
+            }
+
+            if (e.target.id === 'get-meal-ideas') {
+                getMealSuggestions();
+            }
+        }
+        
+        function handleGlossarySearch(e) {
+            if (e.target.id === 'glossary-search') {
+                const catButton = document.querySelector('.glossary-cat-btn.bg-blue-500');
+                renderGlossary(catButton ? catButton.dataset.cat : 'All', e.target.value);
+            }
+        }
+        
+        // Modal close functionality
+        modalCloseButton.onclick = () => { modal.style.display = "none"; }
+        window.onclick = (event) => {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+
+        document.querySelector('nav').addEventListener('click', handleNavClick);
+        document.getElementById('emergency-button').addEventListener('click', renderEmergency);
+        mainContent.addEventListener('click', handleMainContentClick);
+        mainContent.addEventListener('input', handleGlossarySearch);
+
+        renderToday();
+    </script>
+</body>
+</html>
