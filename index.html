@@ -283,4 +283,491 @@
                 terms: [
                     { en: "Are you comfortable?", cn: "你舒服嗎？ (néih syu1fuk6 maa3?)", id: "Apakah Anda nyaman?", cat: "Care" },
                     { en: "Time for medicine", cn: "食藥時間 (sik6 joek6 si4gaan3)", id: "Waktunya minum obat", cat: "Care" },
-                    { en: "Pain / Hurt", cn: "痛 (tung3)", id: "Sakit / Nyeri", cat: "C
+                    { en: "Pain / Hurt", cn: "痛 (tung3)", id: "Sakit / Nyeri", cat: "Care" },
+                    { en: "Dizzy", cn: "頭暈 (tau4wan4)", id: "Pusing", cat: "Care" },
+                    { en: "Tired", cn: "攰 (gui6)", id: "Lelah / Capek", cat: "Care" },
+                    { en: "Shower/Bathe", cn: "沖涼 (cung1 loeng4)", id: "Mandi", cat: "Care" },
+                    { en: "Rice", cn: "飯 (faan6)", id: "Nasi", cat: "Food" },
+                    { en: "Congee / Porridge", cn: "粥 (zuk1)", id: "Bubur", cat: "Food" },
+                    { en: "Fish", cn: "魚 (jyu2)", id: "Ikan", cat: "Food" },
+                    { en: "Chicken", cn: "雞 (gai1)", id: "Ayam", cat: "Food" },
+                    { en: "Pork", cn: "豬肉 (zyu1juk6)", id: "Daging babi", cat: "Food" },
+                    { en: "Vegetables", cn: "菜 (coi3)", id: "Sayuran", cat: "Food" },
+                    { en: "Soup", cn: "湯 (tong1)", id: "Sup", cat: "Food" },
+                    { en: "Drink water", cn: "飲水 (jam2 seoi2)", id: "Minum air", cat: "Food" },
+                    { en: "Clean", cn: "清潔 (cing1git3)", id: "Membersihkan", cat: "Household" },
+                    { en: "Wash clothes", cn: "洗衫 (sai2saam1)", id: "Mencuci baju", cat: "Household" },
+                    { en: "Mop floor", cn: "拖地 (to1dei6)", id: "Mengepel lantai", cat: "Household" },
+                    { en: "Cook", cn: "煮飯 (zyu2faan6)", id: "Memasak", cat: "Household" },
+                    { en: "Kitchen", cn: "廚房 (cyu4fong2)", id: "Dapur", cat: "Household" },
+                    { en: "Bathroom", cn: "廁所 (ci3so2)", id: "Kamar mandi", cat: "Household" },
+                    { en: "Head", cn: "頭 (tau4)", id: "Kepala", cat: "Body" },
+                    { en: "Hand", cn: "手 (sau2)", id: "Tangan", cat: "Body" },
+                    { en: "Back", cn: "背脊 (bui3zek3)", id: "Punggung", cat: "Body" },
+                    { en: "Leg", cn: "腳 (goek3)", id: "Kaki", cat: "Body" },
+                    { en: "Stomach", cn: "肚 (tou5)", id: "Perut", cat: "Body" },
+                ]
+            },
+            schedule: {
+                title: "Weekly Schedule (每週時間表 / Jadwal Mingguan)",
+                intro: "This is a general framework. Family and helper should customize it together. It includes daily tasks and helper's rest day.",
+                headers: ["Time", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                rows: [
+                    { time: "7-9 AM", tasks: ["Wake up, Morning Care, Meds, Breakfast"] },
+                    { time: "9-10 AM", tasks: ["Light Exercise", "Daily Chores", "Light Exercise", "Daily Chores", "Light Exercise", "Gentle Activities", ""] },
+                    { time: "10-12 PM", tasks: ["Weekly Chore (Laundry)", "Appt/Shopping", "Weekly Chore (Bathroom)", "Weekly Chore (Kitchen)", "Weekly Chore (Laundry)", "Family Visit", ""] },
+                    { time: "12-1 PM", tasks: ["Lunch Prep & Meal"] },
+                    { time: "1-3 PM", tasks: ["Madam [Name]'s Rest, Helper's Break"] },
+                    { time: "3-5 PM", tasks: ["Snack, Companionship, Light Activity/Walk"] },
+                    { time: "5-7 PM", tasks: ["Dinner Prep & Meal"] },
+                    { time: "7-8 PM", tasks: ["Evening Care, Meds, Prepare for Bed"] },
+                    { time: "8 PM+", tasks: ["Madam [Name] Rests, Helper's Personal Time"] }
+                ]
+            }
+        };
+
+        const mainContent = document.getElementById('main-content');
+        const navButtons = document.querySelectorAll('.nav-button');
+        const modal = document.getElementById('gemini-modal');
+        const modalCloseButton = document.querySelector('.close-button');
+        const modalBody = document.getElementById('modal-body');
+        
+        let isAdminLoggedIn = false;
+
+        function renderToday() {
+            const schedule = appData.schedule;
+            const today = new Date();
+            const dayIndex = today.getDay(); 
+            const hour = today.getHours();
+
+            let scheduleHtml = `<div class="grid grid-cols-1 md:grid-cols-8 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
+                <div class="bg-gray-100 p-2 font-bold text-center editable-text">${schedule.headers[0]}</div>
+                ${schedule.headers.slice(1).map((h, i) => `<div class="bg-gray-100 p-2 font-bold text-center editable-text ${ (i + 1) % 7 === dayIndex % 7 ? 'bg-amber-200' : ''}">${h}</div>`).join('')}`;
+            
+            schedule.rows.forEach(row => {
+                const timeParts = row.time.split('-').map(t => parseInt(t));
+                const startHour = timeParts[0];
+                const isCurrentBlock = hour >= startHour && hour < (timeParts[1] || startHour + 1);
+
+                scheduleHtml += `<div class="bg-white p-2 font-semibold editable-text ${isCurrentBlock ? 'current-time-block' : ''}">${row.time}</div>`;
+                for (let i = 0; i < 7; i++) {
+                    let task = row.tasks[i] || (row.tasks.length === 1 ? row.tasks[0] : '');
+                    if (i === 6) task = 'HELPER\'S REST DAY';
+                     scheduleHtml += `<div class="bg-white p-2 text-sm editable-text ${ (i + 1) % 7 === dayIndex % 7 ? 'bg-amber-50' : ''} ${isCurrentBlock ? 'current-time-block' : ''}">${task}</div>`;
+                }
+            });
+            scheduleHtml += `</div>`;
+            
+            mainContent.innerHTML = `
+                <div class="content-card p-6 mb-6">
+                    <h2 class="text-2xl font-bold mb-2 editable-text">${schedule.title}</h2>
+                    <p class="text-gray-600 mb-4 editable-text">${schedule.intro}</p>
+                    ${scheduleHtml}
+                </div>`;
+            if(isAdminLoggedIn) setEditableState(true);
+        }
+        
+        function renderCare() {
+            const care = appData.care;
+            mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2 editable-text">${care.title}</h2>
+                    <p class="text-gray-600 mb-4 editable-text">${care.intro}</p>
+                    <div class="space-y-4">
+                        ${care.sections.map(section => `
+                            <div>
+                                <div class="accordion-header bg-gray-50 hover:bg-gray-100 p-4 rounded-lg flex justify-between items-center">
+                                    <h3 class="font-semibold editable-text">${section.title}</h3>
+                                    <span>▼</span>
+                                </div>
+                                <div class="accordion-content px-4">
+                                    <ul class="list-disc list-inside space-y-2 py-4 text-gray-700">
+                                        ${section.content.map(item => `<li class="editable-text">${item}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>`;
+            if(isAdminLoggedIn) setEditableState(true);
+        }
+
+        function renderMeals() {
+            const meals = appData.meals;
+            mainContent.innerHTML = `
+                <div class="content-card p-6 mb-6">
+                     <h2 class="text-2xl font-bold mb-2 editable-text">${meals.dietProfile.title}</h2>
+                     <ul class="list-disc list-inside space-y-2 text-gray-700">
+                        ${meals.dietProfile.points.map(point => `<li class="editable-text">${point}</li>`).join('')}
+                     </ul>
+                </div>
+                <div class="content-card p-6">
+                    <div class="flex justify-between items-center mb-2">
+                         <h2 class="text-2xl font-bold editable-text">${meals.title}</h2>
+                         <button id="get-meal-ideas" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-full transition-colors">✨ Get New Meal Ideas</button>
+                    </div>
+                    <p class="text-gray-600 mb-4 editable-text">${meals.intro}</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr>
+                                    <th class="py-2 px-4 bg-gray-100 border-b editable-text">Day (日/Hari)</th>
+                                    <th class="py-2 px-4 bg-gray-100 border-b editable-text">Breakfast (早餐)</th>
+                                    <th class="py-2 px-4 bg-gray-100 border-b editable-text">Lunch (午餐)</th>
+                                    <th class="py-2 px-4 bg-gray-100 border-b editable-text">Dinner (晚餐)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${meals.plan.map(item => `
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="py-2 px-4 border-b font-semibold editable-text">${item.day}</td>
+                                        <td class="py-2 px-4 border-b editable-text">${item.breakfast}</td>
+                                        <td class="py-2 px-4 border-b editable-text">${item.lunch}</td>
+                                        <td class="py-2 px-4 border-b editable-text">${item.dinner}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            if(isAdminLoggedIn) setEditableState(true);
+        }
+        
+        function renderActivities() {
+            const activities = appData.activities;
+            mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2 editable-text">${activities.title}</h2>
+                    <p class="text-gray-600 mb-4 editable-text">${activities.intro}</p>
+                    <div class="space-y-6">
+                    ${activities.sections.map(section => `
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3 editable-text">${section.title}</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                ${section.items.map(item => `
+                                    <div class="bg-gray-50 p-4 rounded-lg">
+                                        <h4 class="font-bold editable-text">${item.name}</h4>
+                                        <p class="text-sm text-gray-600 editable-text">${item.desc}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                    </div>
+                </div>
+            `;
+            if(isAdminLoggedIn) setEditableState(true);
+        }
+
+        function renderChores() {
+            const chores = appData.chores;
+            mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2 editable-text">${chores.title}</h2>
+                    <p class="text-gray-600 mb-4 editable-text">${chores.intro}</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3 editable-text">${chores.daily.title}</h3>
+                            <ul class="space-y-2">
+                                ${chores.daily.items.map(item => `
+                                    <li class="flex items-center">
+                                        <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3">
+                                        <span class="editable-text">${item}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3 editable-text">${chores.weekly.title}</h3>
+                             <ul class="space-y-2">
+                                ${chores.weekly.items.map(item => `
+                                    <li class="flex items-center">
+                                        <input type="checkbox" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-3">
+                                        <span class="editable-text">${item}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                </div>`;
+            if(isAdminLoggedIn) setEditableState(true);
+        }
+
+        function renderHealth() {
+            const health = appData.health;
+             mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2 editable-text">${health.title}</h2>
+                    <p class="text-gray-600 mb-6 editable-text">${health.intro}</p>
+                    <div class="space-y-8">
+                        ${health.sections.map(section => {
+                            if (section.type === 'table') {
+                                return `
+                                    <div>
+                                        <h3 class="text-xl font-semibold mb-3 editable-text">${section.title}</h3>
+                                        <div class="overflow-x-auto">
+                                            <table class="w-full text-left border-collapse">
+                                                <thead>
+                                                    <tr>
+                                                        ${section.headers.map(h => `<th class="py-2 px-4 bg-gray-100 border-b editable-text">${h}</th>`).join('')}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${section.rows.map(row => `
+                                                        <tr class="hover:bg-gray-50">
+                                                            ${row.map(cell => `<td class="py-2 px-4 border-b editable-text">${cell}</td>`).join('')}
+                                                        </tr>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                `;
+                            } else {
+                                return `
+                                    <div>
+                                        <h3 class="text-xl font-semibold mb-3 editable-text">${section.title}</h3>
+                                        <ul class="list-disc list-inside space-y-2 text-gray-700">
+                                            ${section.content.map(item => `<li class="editable-text">${item}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                `;
+                            }
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+            if(isAdminLoggedIn) setEditableState(true);
+        }
+        
+        function renderGlossary(filterCat = 'All', searchTerm = '') {
+            const glossary = appData.glossary;
+            const lowerSearchTerm = searchTerm.toLowerCase();
+            
+            const filteredTerms = glossary.terms.filter(term => {
+                const inCategory = filterCat === 'All' || term.cat === filterCat;
+                const inSearch = !searchTerm || 
+                                 term.en.toLowerCase().includes(lowerSearchTerm) ||
+                                 term.cn.toLowerCase().includes(lowerSearchTerm) ||
+                                 term.id.toLowerCase().includes(lowerSearchTerm);
+                return inCategory && inSearch;
+            });
+
+            mainContent.innerHTML = `
+                <div class="content-card p-6">
+                    <h2 class="text-2xl font-bold mb-2 editable-text">${glossary.title}</h2>
+                    <p class="text-gray-600 mb-4 editable-text">${glossary.intro}</p>
+                    
+                    <div class="flex flex-wrap gap-4 mb-4">
+                        <input type="search" id="glossary-search" placeholder="Search (搜尋/Cari)..." class="flex-grow p-2 border rounded-md" value="${searchTerm}">
+                        <div class="flex flex-wrap gap-2 items-center">
+                            ${glossary.categories.map(cat => `
+                                <button data-cat="${cat}" class="glossary-cat-btn px-3 py-1 text-sm rounded-full ${filterCat === cat ? 'bg-blue-500 text-white' : 'bg-gray-200'}">${cat}</button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div id="glossary-list" class="space-y-2">
+                        ${filteredTerms.map(term => `
+                            <div class="p-3 bg-gray-50 rounded-md">
+                                <p class="font-semibold editable-text">${term.en}</p>
+                                <p class="lang-cantonese text-gray-700 editable-text">${term.cn}</p>
+                                <p class="lang-indonesian text-gray-700 editable-text">${term.id}</p>
+                            </div>
+                        `).join('')}
+                        ${filteredTerms.length === 0 ? `<p class="text-center text-gray-500 py-4">No results found.</p>`: ''}
+                    </div>
+                </div>
+            `;
+            if(isAdminLoggedIn) setEditableState(true);
+        }
+
+        function renderEmergency() {
+            const emergency = appData.emergency;
+            mainContent.innerHTML = `
+                <div class="content-card p-6 border-4 border-red-500">
+                    <h2 class="text-3xl font-bold text-red-600 mb-2 editable-text">${emergency.title}</h2>
+                    <p class="text-gray-600 mb-6 editable-text">${emergency.intro}</p>
+                    
+                    <div class="mb-6">
+                        <h3 class="text-xl font-semibold mb-3 editable-text">Key Contacts (重要電話)</h3>
+                        <div class="space-y-3">
+                            ${emergency.contacts.map(contact => `
+                                <div class="bg-red-50 p-4 rounded-lg">
+                                    <p class="font-semibold editable-text">${contact.name}</p>
+                                    <p class="${contact.style} editable-text">${contact.number}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-xl font-semibold mb-3 editable-text">Emergency Actions (應急行動)</h3>
+                        <div class="space-y-4">
+                           ${emergency.actions.map(action => `
+                               <div class="bg-yellow-50 p-4 rounded-lg">
+                                   <h4 class="font-bold editable-text">${action.title}</h4>
+                                   <p class="lang-cantonese editable-text">${action.cantonese}</p>
+                                   <p class="lang-indonesian editable-text">${action.indonesian}</p>
+                               </div>
+                           `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            if(isAdminLoggedIn) setEditableState(true);
+        }
+        
+        async function getMealSuggestions() {
+            modal.style.display = "block";
+            modalBody.innerHTML = `<div class="flex items-center justify-center"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div><p class="ml-4">Generating ideas...</p></div>`;
+
+            const profile = appData.meals.dietProfile.points.join(' ');
+            const prompt = `You are an expert Cantonese home-style cook specializing in nutritious meals for the elderly. Based on these dietary restrictions and preferences: "${profile}", suggest 3 new, simple, and healthy meal ideas (one for breakfast, one for lunch, one for dinner) for an 80-year-old Cantonese lady. For each meal, provide the name in English and Traditional Chinese, and a brief, easy-to-follow description of how to prepare it.`;
+
+            let chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+            const payload = { contents: chatHistory };
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0 && result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    modalBody.innerHTML = text.replace(/\n/g, '<br>');
+                } else {
+                    modalBody.innerHTML = '<p class="text-red-500">Sorry, I could not generate ideas at this moment. Please try again later.</p>';
+                }
+            } catch(error) {
+                modalBody.innerHTML = '<p class="text-red-500">An error occurred while fetching ideas. Please check the console for details.</p>';
+            }
+        }
+
+
+        function handleNavClick(e) {
+            const targetButton = e.target.closest('.nav-button');
+            if (!targetButton) return;
+
+            const tab = targetButton.dataset.tab;
+            if (tab) {
+                navButtons.forEach(btn => btn.classList.remove('active'));
+                targetButton.classList.add('active');
+            }
+            
+            switch(tab) {
+                case 'care': renderCare(); break;
+                case 'meals': renderMeals(); break;
+                case 'activities': renderActivities(); break;
+                case 'chores': renderChores(); break;
+                case 'health': renderHealth(); break;
+                case 'glossary': renderGlossary(); break;
+                case 'today':
+                default:
+                    renderToday();
+            }
+        }
+        
+        function handleMainContentClick(e) {
+            const accordionHeader = e.target.closest('.accordion-header');
+            if (accordionHeader) {
+                const content = accordionHeader.nextElementSibling;
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }
+                return;
+            }
+
+            const catButton = e.target.closest('.glossary-cat-btn');
+            if (catButton) {
+                const searchInput = document.getElementById('glossary-search');
+                renderGlossary(catButton.dataset.cat, searchInput ? searchInput.value : '');
+                return;
+            }
+
+            if (e.target.id === 'get-meal-ideas') {
+                getMealSuggestions();
+            }
+        }
+        
+        function handleGlossarySearch(e) {
+            if (e.target.id === 'glossary-search') {
+                const catButton = document.querySelector('.glossary-cat-btn.bg-blue-500');
+                renderGlossary(catButton ? catButton.dataset.cat : 'All', e.target.value);
+            }
+        }
+        
+        // Modal close functionality
+        modalCloseButton.onclick = () => { modal.style.display = "none"; }
+        window.onclick = (event) => {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+        
+        // --- Admin Functionality ---
+        function setEditableState(isEditable) {
+             const elements = document.querySelectorAll('.editable-text');
+             elements.forEach(el => {
+                 el.contentEditable = isEditable;
+                 if (isEditable) {
+                     el.classList.add('editable');
+                 } else {
+                     el.classList.remove('editable');
+                 }
+             });
+        }
+
+        function adminLogin() {
+            const password = prompt("Enter administrator password:", "");
+            if (password === "1234") {
+                isAdminLoggedIn = true;
+                document.getElementById('admin-bar').style.display = 'block';
+                document.getElementById('admin-login-btn').style.display = 'none';
+                setEditableState(true);
+            } else if (password) {
+                alert("Incorrect password.");
+            }
+        }
+        
+        function adminLogout() {
+            isAdminLoggedIn = false;
+            document.getElementById('admin-bar').style.display = 'none';
+            document.getElementById('admin-login-btn').style.display = 'block';
+            setEditableState(false);
+        }
+        
+        function saveChanges() {
+             setEditableState(false); // Turn off outlines before saving
+             const currentHtml = document.documentElement.outerHTML;
+             const blob = new Blob([currentHtml], {type: 'text/html'});
+             const a = document.createElement('a');
+             a.href = URL.createObjectURL(blob);
+             a.download = 'care-guide-updated.html';
+             a.click();
+             URL.revokeObjectURL(a.href);
+             setEditableState(true); // Turn outlines back on
+             alert("The updated HTML file has been downloaded. Please upload this new file to your hosting service to see the changes live.");
+        }
+        
+        document.getElementById('admin-login-btn').addEventListener('click', adminLogin);
+        document.getElementById('logout-btn').addEventListener('click', adminLogout);
+        document.getElementById('save-changes-btn').addEventListener('click', saveChanges);
+        // --- End Admin Functionality ---
+
+        document.querySelector('nav').addEventListener('click', handleNavClick);
+        document.getElementById('emergency-button').addEventListener('click', renderEmergency);
+        mainContent.addEventListener('click', handleMainContentClick);
+        mainContent.addEventListener('input', handleGlossarySearch);
+
+        renderToday();
+    </script>
+</body>
+</html>
